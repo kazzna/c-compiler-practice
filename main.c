@@ -10,9 +10,9 @@ int main(int argc, char **argv) {
 
 	// トークナイズしてパースする
 	tokenize(argv[1]);
-	Node *node = expr();
+	NodeList *nodes = parse_program();
 
 	// コード生成
-	generate(node);
+	generate(nodes);
 	return 0;
 }

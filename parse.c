@@ -13,6 +13,8 @@ typedef struct Token Token;
 typedef enum {
 	// 記号
 	TK_RESERVED,
+	// 識別子
+	TK_IDENT,
 	// 整数トークン
 	TK_NUM,
 	// 入力の終わりを表すトークン
@@ -70,8 +72,14 @@ void error_at(char *loc, char *fmt, ...) {
 }
 
 bool expect_token(char *op) {
-	if (token->kind != TK_RESERVED)
-		return false;
+	switch (token->kind) {
+		case TK_RESERVED:
+			break;
+		case TK_IDENT:
+			break;
+		default:
+			return false;
+	}
 	if (strlen(op) != token->len)
 		return false;
 	if (memcmp(token->str, op, token->len))
@@ -87,6 +95,18 @@ bool consume(char *op) {
 	if (result)
 		token = token->next;
 	return result;
+}
+
+// 現在のトークンが変数の場合、
+// トークンを読み進めたうえで変数のトークンを返却します。
+Token *consume_ident() {
+	Token *tok = NULL;
+	bool result = expect_token("a") || expect_token("b") || expect_token("c");
+	if (result) {
+		tok = token;
+		token = token->next;
+	}
+	return tok;
 }
 
 // 次のトークンが期待している記号のときには、
@@ -126,7 +146,6 @@ bool starts_with(char *p, char *q) {
 	return memcmp(p, q, strlen(q)) == 0;
 }
 
-
 // 入力文字列pをトークナイズしてそれを返す。
 void *tokenize(char *p) {
 	Token head;
@@ -141,7 +160,7 @@ void *tokenize(char *p) {
 			continue;
 		}
 
-		// 複数文字記号
+		// 2文字記号
 		if (starts_with(p, "==") || starts_with(p, "!=") ||
 				starts_with(p, "<=") || starts_with(p, ">=")) {
 			cur = new_token(TK_RESERVED, cur, p, 2);
@@ -149,12 +168,19 @@ void *tokenize(char *p) {
 			continue;
 		}
 
-		// 単文字記号
-		if (strchr("+-*/()<>", *p)) {
+		// 1文字記号
+		if (strchr("+-*/()<>;=", *p)) {
 			cur = new_token(TK_RESERVED, cur, p++, 1);
 			continue;
 		}
 
+		// 1文字アルファベット
+		if ('a' <= *p && *p <= 'c') {
+			cur = new_token(TK_IDENT, cur, p++, 1);
+			continue;
+		}
+
+		// 数値
 		if (isdigit(*p)) {
 			char *q = p;
 			cur = new_token(TK_NUM, cur, p, 0);
@@ -170,6 +196,9 @@ void *tokenize(char *p) {
 	token = head.next;
 }
 
+Node *statement(void);
+Node *expression(void);
+Node *assign(void);
 Node *equality(void);
 Node *relational(void);
 Node *add(void);
@@ -177,9 +206,40 @@ Node *mul(void);
 Node *unary(void);
 Node *primary(void);
 
+NodeList *new_node_list(NodeList *cur, Node *node) {
+	NodeList *nodes = calloc(1, sizeof(NodeList));
+	nodes->node = node;
+	cur->next = nodes;
+	return nodes;
+}
+
+NodeList *parse_program() {
+	NodeList head;
+	NodeList *cur = &head;
+	int i = 0;
+	while (!at_eof()) {
+		Node *node = statement();
+		cur = new_node_list(cur, node);
+	}
+	return head.next;
+}
+
+Node *statement() {
+	Node *node = expression();
+	expect(";");
+	return node;
+}
+
 // Parse expr
-Node *expr() {
-	return equality();
+Node *expression() {
+	return assign();
+}
+
+Node *assign() {
+	Node *node = equality();
+	if (consume("="))
+		node = new_node(ND_ASSIGN, node, assign());
+	return node;
 }
 
 // Parse equality
@@ -255,8 +315,16 @@ Node *unary() {
 Node *primary() {
 	// 次のトークンが"("なら、"(" expr ")"のはず。
 	if (consume("(")) {
-		Node *node = expr();
+		Node *node = expression();
 		expect(")");
+		return node;
+	}
+
+	Token *tok = consume_ident();
+	if (tok) {
+		Node *node = calloc(1, sizeof(Node));
+		node->kind = ND_LVAR;
+		node->offset = (tok->str[0] - 'a' + 1) * 8;
 		return node;
 	}
 

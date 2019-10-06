@@ -16,15 +16,19 @@ typedef enum {
 	ND_NE,
 	// <
 	ND_LT,
-	// <
+	// <=
 	ND_LE,
-	// 整数
+	// Assign
+	ND_ASSIGN,
+	// Local variable
+	ND_LVAR,
+	// Number
 	ND_NUM,
 } NodeKind;
 
 typedef struct Node Node;
 
-// 中小構文木のノードの型
+// 抽象構文木のノードの型
 struct Node {
 	// ノードの型
 	NodeKind kind;
@@ -34,15 +38,25 @@ struct Node {
 	Node *rhs;
 	// kindがND_NUMの場合: 数値
 	int val;
+	// kindがND_LVARの場合: メモリ位置
+	int offset;
+};
+
+typedef struct NodeList NodeList;
+
+// Node列
+struct NodeList {
+	Node *node;
+	NodeList *next;
 };
 
 // 入力文字列をトークナイズして内部に保持する。
 void *tokenize(char *p);
 
-// Parse expr
-Node *expr(void);
+// Parse program
+NodeList *parse_program(void);
 
 // 構文木からコードを生成する。
-void generate(Node *node);
+void generate(NodeList *nodes);
 
 #endif
